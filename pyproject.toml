@@ -1,0 +1,30 @@
+[project]
+name = "evidence-first-rag"
+version = "0.1.0"
+description = "Evidence-first contract and payment risk assistant using FastAPI and pgvector"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29.0",
+    "pgvector>=0.3.0",
+    "alembic>=1.13.0",
+    "pymupdf>=1.24.0",
+    "openai>=1.33.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
