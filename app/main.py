@@ -1,31 +1,31 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from sqlalchemy import text
-from app.api.routes import health
-from app.core.config import settings
-from app.db.session import engine
 
+from app.api.routes.health import router as health_router
+from app.core.config import get_settings
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Ensure pgvector extension exists
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-    yield
-    # Shutdown
-    await engine.dispose()
-
+settings = get_settings()
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version="0.1.0",
-    description="Evidence-First Contract & Document Risk Assistant",
-    lifespan=lifespan,
+    title=settings.app_name,
+    version=settings.app_version,
+    description=(
+        "Evidence-first RAG service for construction-contract and payment-document review. "
+        "It returns page-cited evidence, routes uncertainty to human review, and avoids "
+        "unsupported conclusions."
+    ),
 )
 
-app.include_router(health.router)
+app.include_router(health_router)
 
 
-@app.get("/")
-async def root():
-    return {"message": "Evidence-First RAG Service is Running", "docs": "/docs"}
+@app.get(
+    "/",
+    summary="Get service information",
+    description="Returns a short service description and the OpenAPI documentation path.",
+)
+async def root() -> dict[str, str]:
+    """Return basic service metadata."""
+    return {
+        "message": "Evidence-First RAG Service is running.",
+        "docs": "/docs",
+    }

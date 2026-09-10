@@ -1,28 +1,29 @@
-from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from app.core.config import settings
+import ssl
+from collections.abc import AsyncGenerator
 
-# asyncpg requires ssl passed via connect_args for cloud-hosted DBs like Neon
-connect_args = {"ssl": True} if "neon.tech" in settings.DATABASE_URL else {}
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.core.config import get_settings
+
+settings = get_settings()
+
+ssl_context = ssl.create_default_context()
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=(settings.ENVIRONMENT == "development"),
-    future=True,
-    connect_args=connect_args,
+    settings.database_url,
+    echo=settings.debug,
+    pool_pre_ping=True,
+    connect_args={"ssl": ssl_context},
 )
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
-    autoflush=False,
 )
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Yield one database session per request."""
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session

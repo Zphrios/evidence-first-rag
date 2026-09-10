@@ -1,27 +1,51 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
 
-router = APIRouter(tags=["Health"])
+from app.core.config import get_settings
+from app.db.session import get_db_session
+
+router = APIRouter(tags=["health"])
 
 
-@router.get("/health", status_code=status.HTTP_200_OK)
-async def health_check(db: AsyncSession = Depends(get_db)):
-    """Verifies API status and Neon PostgreSQL + pgvector connectivity."""
+@router.get(
+    "/health",
+    summary="Check application and database health",
+    description=(
+        "Confirms that the service can reach PostgreSQL and that the pgvector extension "
+        "is available in the configured database."
+    ),
+)
+async def health_check(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, str]:
+    """Return service metadata only after successful database and pgvector checks."""
     try:
-        result = await db.execute(
-            text("SELECT extname FROM pg_extension WHERE extname = 'vector';")
+        await session.execute(text("SELECT 1"))
+        result = await session.execute(
+            text("SELECT extname FROM pg_extension WHERE extname = 'vector'")
         )
-        extension = result.scalar()
-        db_status = "connected"
-        pgvector_status = "installed" if extension == "vector" else "not_installed"
-    except Exception as e:
-        db_status = f"unhealthy: {str(e)}"
-        pgvector_status = "unknown"
+        vector_extension = result.scalar_one_or_none()
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connectivity check failed.",
+        ) from exc
+
+    if vector_extension != "vector":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The pgvector extension is not installed.",
+        )
+
+    settings = get_settings()
 
     return {
-        "status": "healthy",
-        "database": db_status,
-        "pgvector": pgvector_status,
+        "status": "ok",
+        "app": settings.app_name,
+        "environment": settings.app_env,
+        "version": settings.app_version,
+        "database": "connected",
+        "pgvector": "installed",
     }
