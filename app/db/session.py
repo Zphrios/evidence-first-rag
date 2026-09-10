@@ -23,7 +23,7 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """Yield one database session per request."""
     async with AsyncSessionLocal() as session:
         yield session
