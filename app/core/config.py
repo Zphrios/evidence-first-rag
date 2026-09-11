@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_version: str = "0.1.0"
     debug: bool = False
+    max_upload_size_bytes: int = 25 * 1024 * 1024
 
     database_url: str
 

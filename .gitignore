@@ -18,3 +18,9 @@ venv/
 
 # Local demo data
 data/raw/
+
+# Local uploaded files
+storage/
+
+# Local manual upload test files
+sample-upload*.pdf
