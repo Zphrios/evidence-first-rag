@@ -27,3 +27,5 @@ sample-upload*.pdf
 
 .coverage
 htmlcov/
+
+PROJECT_GUIDANCE.pdf
