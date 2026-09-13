@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     max_upload_size_bytes: int = 25 * 1024 * 1024
+    max_pdf_page_count: int = 250
+    max_pdf_chunk_count: int = 5_000
 
     database_url: str
 

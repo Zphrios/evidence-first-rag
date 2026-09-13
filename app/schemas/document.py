@@ -24,3 +24,11 @@ class DocumentRead(BaseModel):
     error_message: str | None
     created_at: datetime
     updated_at: datetime
+    
+    
+class DocumentProcessingResult(BaseModel):
+    """Result returned after synchronous PDF text extraction and chunking."""
+
+    document: DocumentRead
+    page_count: int
+    chunk_count: int

@@ -21,3 +21,13 @@ def delete_document_bytes(storage_key: str) -> None:
     destination = STORAGE_ROOT / storage_key
     if destination.exists():
         destination.unlink()
+
+
+def read_document_bytes(storage_key: str) -> bytes:
+    """Read stored PDF bytes from the local development storage root."""
+    source = STORAGE_ROOT / storage_key
+
+    if not source.is_file():
+        raise FileNotFoundError(f"Stored document file not found: {storage_key}")
+
+    return source.read_bytes()

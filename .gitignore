@@ -24,3 +24,6 @@ storage/
 
 # Local manual upload test files
 sample-upload*.pdf
+
+.coverage
+htmlcov/
