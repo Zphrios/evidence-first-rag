@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_chat_model: str = "gpt-4.1-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
 
 
 @lru_cache

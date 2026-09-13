@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from hashlib import sha256
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -9,7 +11,13 @@ from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
 from app.main import app
 from app.models.audit import AuditAction, AuditEvent
-from app.models.document import Chunk, Document, DocumentPage, DocumentStatus
+from app.models.document import (
+    Chunk,
+    Document,
+    DocumentPage,
+    DocumentStatus,
+    DocumentType,
+)
 from app.models.project import Project
 from app.services.storage import STORAGE_ROOT
 
@@ -871,3 +879,101 @@ async def test_process_pdf_above_chunk_limit_marks_document_failed(
                 project = await session.get(Project, project_id)
                 if project is not None:
                     await session.delete(project)
+                    
+
+@pytest.mark.asyncio
+async def test_chunk_embedding_metadata_persists() -> None:
+    """A chunk stores and returns embedding metadata through pgvector."""
+    project_id: UUID | None = None
+    document_id: UUID | None = None
+    page_id: UUID | None = None
+    chunk_id: UUID | None = None
+
+    embedding = [0.0] * 1536
+    embedding[0] = 1.0
+    text_content = "The contractor must provide written notice before termination."
+    embedded_at = datetime.now(UTC)
+    embedding_model = "text-embedding-3-small"
+    embedding_text_hash = sha256(text_content.encode("utf-8")).hexdigest()
+
+    try:
+        async with AsyncSessionLocal.begin() as session:
+            project = Project(
+                name=f"Embedding Persistence Test {uuid4()}",
+                description="Created by the embedding persistence integration test.",
+            )
+            session.add(project)
+            await session.flush()
+            project_id = project.id
+
+            document = Document(
+                project_id=project.id,
+                original_filename="embedding-test.pdf",
+                storage_key=f"tests/embedding-{uuid4()}.pdf",
+                sha256=sha256(b"embedding-test-pdf").hexdigest(),
+                content_type="application/pdf",
+                size_bytes=1,
+                document_type=DocumentType.CONSTRUCTION_CONTRACT,
+                status=DocumentStatus.PROCESSED,
+                processed_at=embedded_at,
+            )
+            session.add(document)
+            await session.flush()
+            document_id = document.id
+
+            page = DocumentPage(
+                document_id=document.id,
+                page_number=1,
+                text_content=text_content,
+            )
+            session.add(page)
+            await session.flush()
+            page_id = page.id
+
+            chunk = Chunk(
+                page_id=page.id,
+                chunk_index=0,
+                text_content=text_content,
+                token_count=10,
+                embedding=embedding,
+                embedding_model=embedding_model,
+                embedding_text_hash=embedding_text_hash,
+                embedded_at=embedded_at,
+            )
+            session.add(chunk)
+            await session.flush()
+            chunk_id = chunk.id
+
+        async with AsyncSessionLocal() as session:
+            stored_chunk = await session.get(Chunk, chunk_id)
+
+            assert stored_chunk is not None
+            assert stored_chunk.embedding is not None
+            assert len(stored_chunk.embedding) == 1536
+            assert stored_chunk.embedding[0] == 1.0
+            assert stored_chunk.embedding[1] == 0.0
+            assert stored_chunk.embedding_model == embedding_model
+            assert stored_chunk.embedding_text_hash == embedding_text_hash
+            assert stored_chunk.embedded_at == embedded_at
+    finally:
+        async with AsyncSessionLocal.begin() as session:
+            if chunk_id is not None:
+                chunk = await session.get(Chunk, chunk_id)
+                if chunk is not None:
+                    await session.delete(chunk)
+
+            if page_id is not None:
+                page = await session.get(DocumentPage, page_id)
+                if page is not None:
+                    await session.delete(page)
+
+            if document_id is not None:
+                document = await session.get(Document, document_id)
+                if document is not None:
+                    await session.delete(document)
+
+            if project_id is not None:
+                project = await session.get(Project, project_id)
+                if project is not None:
+                    await session.delete(project)
+                    
