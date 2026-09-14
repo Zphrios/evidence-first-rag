@@ -3,7 +3,11 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.evidence import Citation, EvidenceSearchResponse
+from app.schemas.evidence import (
+    Citation,
+    EvidenceSearchRequest,
+    EvidenceSearchResponse,
+)
 
 
 def test_citation_accepts_complete_verifiable_source_location() -> None:
@@ -69,3 +73,30 @@ def test_evidence_search_response_rejects_blank_question() -> None:
             evidence=[],
             no_evidence_found=True,
         )
+
+
+def test_evidence_search_request_accepts_question_and_default_limit() -> None:
+    request = EvidenceSearchRequest(
+        question="What notice is required before termination?",
+    )
+
+    assert request.question == "What notice is required before termination?"
+    assert request.limit == 8
+
+
+@pytest.mark.parametrize(
+    ("question", "limit"),
+    [
+        ("", 8),
+        (" ", 8),
+        ("\n\t", 8),
+        ("Valid question", 0),
+        ("Valid question", 21),
+    ],
+)
+def test_evidence_search_request_rejects_invalid_input(
+    question: str,
+    limit: int,
+) -> None:
+    with pytest.raises(ValidationError):
+        EvidenceSearchRequest(question=question, limit=limit)

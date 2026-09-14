@@ -3,6 +3,21 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
+class EvidenceSearchRequest(BaseModel):
+    """Question and retrieval limit submitted for project evidence search."""
+
+    question: str = Field(min_length=1)
+    limit: int = Field(default=8, ge=1, le=20)
+
+    @field_validator("question")
+    @classmethod
+    def reject_blank_question(cls, value: str) -> str:
+        """Reject an empty or whitespace-only search question."""
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
 class Citation(BaseModel):
     """A verifiable location within a source document."""
 
