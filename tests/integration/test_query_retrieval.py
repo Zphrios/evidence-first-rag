@@ -9,7 +9,10 @@ from app.db.session import AsyncSessionLocal
 from app.models.document import Chunk, Document, DocumentPage, DocumentStatus, DocumentType
 from app.models.project import Project
 from app.services.embeddings import hash_text
-from app.services.query_retrieval import retrieve_question_evidence
+from app.services.query_retrieval import (
+    retrieve_question_evidence,
+    search_project_evidence,
+)
 
 EMBEDDING_DIMENSIONS = 1536
 EMBEDDING_MODEL = "test-embedding-model"
@@ -224,3 +227,106 @@ async def test_retrieve_question_evidence_propagates_provider_failure() -> None:
                 embedding_model=EMBEDDING_MODEL,
                 embedding_dimensions=EMBEDDING_DIMENSIONS,
             )
+
+
+@pytest.mark.asyncio
+async def test_search_project_evidence_returns_citation_ready_response() -> None:
+    """Retrieved chunks become stable citation records."""
+    vector = [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1)
+    client = FakeEmbeddingClient(vectors=[vector])
+    project_id: UUID | None = None
+    document_id: UUID | None = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            project = Project(
+                name=f"Citation Project {uuid4()}",
+                description=None,
+            )
+            session.add(project)
+            await session.flush()
+            project_id = project.id
+
+            document = Document(
+                project_id=project.id,
+                original_filename="general-conditions.pdf",
+                storage_key=f"tests/citation-{uuid4()}/general-conditions.pdf",
+                sha256=sha256(str(uuid4()).encode("utf-8")).hexdigest(),
+                content_type="application/pdf",
+                size_bytes=1024,
+                document_type=DocumentType.CONSTRUCTION_CONTRACT,
+                status=DocumentStatus.PROCESSED,
+                processed_at=datetime.now(UTC),
+            )
+            session.add(document)
+            await session.flush()
+            document_id = document.id
+
+            page = DocumentPage(
+                document_id=document.id,
+                page_number=7,
+                text_content="Termination notice requirements appear on this page.",
+            )
+            session.add(page)
+            await session.flush()
+
+            chunk_text = (
+                "The contractor shall provide written notice before termination."
+            )
+            chunk = Chunk(
+                page_id=page.id,
+                chunk_index=3,
+                text_content=chunk_text,
+                embedding=vector,
+                embedding_model=EMBEDDING_MODEL,
+                embedding_text_hash=hash_text(chunk_text),
+                embedded_at=datetime.now(UTC),
+            )
+            session.add(chunk)
+            await session.commit()
+
+            response = await search_project_evidence(
+                project.id,
+                question="What notice is required before termination?",
+                session=session,
+                client=client,
+                embedding_model=EMBEDDING_MODEL,
+                embedding_dimensions=EMBEDDING_DIMENSIONS,
+            )
+
+        assert response.question == "What notice is required before termination?"
+        assert response.no_evidence_found is False
+        assert len(response.evidence) == 1
+
+        citation = response.evidence[0]
+        assert citation.chunk_id == chunk.id
+        assert citation.document_id == document.id
+        assert citation.document_filename == "general-conditions.pdf"
+        assert citation.page_number == 7
+        assert citation.chunk_index == 3
+        assert citation.excerpt == chunk_text
+    finally:
+        await delete_query_retrieval_test_data(
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_search_project_evidence_reports_no_evidence_found() -> None:
+    """An empty retrieval result is explicit rather than ambiguous."""
+    vector = [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1)
+    client = FakeEmbeddingClient(vectors=[vector])
+
+    async with AsyncSessionLocal() as session:
+        response = await search_project_evidence(
+            uuid4(),
+            question="What notice is required before termination?",
+            session=session,
+            client=client,
+            embedding_model=EMBEDDING_MODEL,
+            embedding_dimensions=EMBEDDING_DIMENSIONS,
+        )
+
+    assert response.evidence == []
+    assert response.no_evidence_found is True
